@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#121212" />
+  <title>EV Charger Status</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app">
+
+    <header>
+      <div class="header-title">
+        <span class="header-icon">⚡</span>
+        <h1>EV Charger</h1>
+      </div>
+      <div class="header-meta">
+        <span id="last-updated" class="last-updated">—</span>
+        <button id="refresh-btn" class="icon-btn" title="Refresh now" aria-label="Refresh now">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="port-grid">
+      <!-- Port cards rendered here by app.js -->
+      <div class="port-card skeleton" id="port-1-card">
+        <div class="port-label">Port 1</div>
+        <div class="status-badge">—</div>
+        <div class="time-info">Loading…</div>
+      </div>
+      <div class="port-card skeleton" id="port-2-card">
+        <div class="port-label">Port 2</div>
+        <div class="status-badge">—</div>
+        <div class="time-info">Loading…</div>
+      </div>
+    </main>
+
+    <div class="aggregate-note" id="aggregate-note" hidden>
+      <span>⚠ Port-level detail unavailable — showing total availability only.</span>
+    </div>
+
+    <div class="controls">
+      <button id="watch-btn" class="watch-btn">
+        <span id="watch-btn-icon">🔔</span>
+        <span id="watch-btn-label">Notify Me When Available</span>
+      </button>
+    </div>
+
+    <div class="watch-status" id="watch-status" hidden>
+      <span class="watch-dot"></span>
+      Watching since <span id="watch-since">—</span>
+    </div>
+
+    <div class="error-banner" id="error-banner" hidden></div>
+
+    <div class="poll-status" id="poll-status" hidden>
+      <span id="poll-error-msg"></span>
+    </div>
+
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

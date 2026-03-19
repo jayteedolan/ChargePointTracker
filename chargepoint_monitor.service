@@ -1,0 +1,22 @@
+[Unit]
+Description=ChargePoint EV Charger Monitor
+# Wait for network before starting — needed for ChargePoint auth on startup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jtdolan
+WorkingDirectory=/home/jtdolan/Projects/ChargePointTracker
+EnvironmentFile=/home/jtdolan/Projects/ChargePointTracker/.env
+ExecStart=/home/jtdolan/Projects/ChargePointTracker/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT} --no-access-log
+# Restart on crash (e.g. network blip during initial auth)
+Restart=always
+RestartSec=10
+# Log to systemd journal (view with: sudo journalctl -u chargepoint-monitor -f)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=chargepoint-monitor
+
+[Install]
+WantedBy=multi-user.target
