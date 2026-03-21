@@ -60,24 +60,29 @@ function renderPorts(data) {
 }
 
 function renderPerPort(data, grid) {
-  // Ensure we have exactly the right cards (add if missing, remove extras)
-  const portNums = data.ports.map(p => p.port_number);
+  const multiStation = data.station_ids.length > 1;
+
+  // Build set of current card keys
+  const cardKeys = new Set(data.ports.map(p => `${p.station_id}-${p.port_number}`));
 
   // Remove any cards not in the new data
   grid.querySelectorAll('.port-card').forEach(card => {
-    const num = parseInt(card.dataset.port, 10);
-    if (!portNums.includes(num)) card.remove();
+    if (!cardKeys.has(card.dataset.key)) card.remove();
   });
 
   for (const port of data.ports) {
-    let card = document.getElementById(`port-${port.port_number}-card`);
+    const key = `${port.station_id}-${port.port_number}`;
+    let card = document.getElementById(`port-${key}-card`);
     if (!card) {
       card = document.createElement('div');
       card.className = 'port-card';
-      card.id = `port-${port.port_number}-card`;
-      card.dataset.port = port.port_number;
+      card.id = `port-${key}-card`;
+      card.dataset.key = key;
+      const label = multiStation
+        ? `Station ${port.station_id} · Port ${port.port_number}`
+        : `Port ${port.port_number}`;
       card.innerHTML = `
-        <div class="port-label">Port ${port.port_number}</div>
+        <div class="port-label">${label}</div>
         <div class="status-badge"></div>
         <div class="time-info"></div>
       `;

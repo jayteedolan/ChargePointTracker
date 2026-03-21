@@ -40,14 +40,23 @@ def _get_conn() -> Generator[sqlite3.Connection, None, None]:
 
 def init_db() -> None:
     with _get_conn() as conn:
+        # Migrate legacy port_status table (no station_id column) to the new schema
+        cursor = conn.execute("PRAGMA table_info(port_status)")
+        existing_columns = [row[1] for row in cursor.fetchall()]
+        if existing_columns and "station_id" not in existing_columns:
+            logger.info("Migrating port_status table to add station_id column")
+            conn.execute("DROP TABLE port_status")
+
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS port_status (
-                port_number     INTEGER PRIMARY KEY,
+                station_id      INTEGER NOT NULL,
+                port_number     INTEGER NOT NULL,
                 is_available    INTEGER NOT NULL DEFAULT 0,
                 status_since    TEXT NOT NULL,
                 last_polled_at  TEXT NOT NULL,
                 last_poll_error TEXT,
-                status_source   TEXT NOT NULL DEFAULT 'per_port'
+                status_source   TEXT NOT NULL DEFAULT 'per_port',
+                PRIMARY KEY (station_id, port_number)
             );
 
             CREATE TABLE IF NOT EXISTS watch_state (
@@ -70,17 +79,6 @@ def init_db() -> None:
         # Seed watch_state row (idempotent)
         conn.execute("INSERT OR IGNORE INTO watch_state (id, is_active) VALUES (1, 0)")
 
-        # Seed port_status rows with placeholder values (idempotent)
-        now = _now_iso()
-        conn.execute(
-            "INSERT OR IGNORE INTO port_status (port_number, is_available, status_since, last_polled_at, status_source) VALUES (1, 0, ?, ?, 'per_port')",
-            (now, now),
-        )
-        conn.execute(
-            "INSERT OR IGNORE INTO port_status (port_number, is_available, status_since, last_polled_at, status_source) VALUES (2, 0, ?, ?, 'per_port')",
-            (now, now),
-        )
-
     logger.info("Database initialised at %s", DB_PATH)
 
 
@@ -89,6 +87,7 @@ def init_db() -> None:
 # ---------------------------------------------------------------------------
 
 class PortRow(NamedTuple):
+    station_id: int
     port_number: int
     is_available: bool
     status_since: str       # ISO-8601 UTC
@@ -100,8 +99,8 @@ class PortRow(NamedTuple):
 def get_all_ports() -> list[PortRow]:
     with _get_conn() as conn:
         rows = conn.execute(
-            "SELECT port_number, is_available, status_since, last_polled_at, last_poll_error, status_source "
-            "FROM port_status ORDER BY port_number"
+            "SELECT station_id, port_number, is_available, status_since, last_polled_at, last_poll_error, status_source "
+            "FROM port_status ORDER BY station_id, port_number"
         ).fetchall()
     return [PortRow(*row) for row in rows]
 
@@ -115,8 +114,8 @@ def any_port_available() -> bool:
 def get_available_ports() -> list[PortRow]:
     with _get_conn() as conn:
         rows = conn.execute(
-            "SELECT port_number, is_available, status_since, last_polled_at, last_poll_error, status_source "
-            "FROM port_status WHERE is_available = 1 ORDER BY port_number"
+            "SELECT station_id, port_number, is_available, status_since, last_polled_at, last_poll_error, status_source "
+            "FROM port_status WHERE is_available = 1 ORDER BY station_id, port_number"
         ).fetchall()
     return [PortRow(*row) for row in rows]
 
@@ -130,8 +129,8 @@ def update_port_status(station_data: StationData) -> None:
     with _get_conn() as conn:
         for port in station_data.ports:
             existing = conn.execute(
-                "SELECT is_available FROM port_status WHERE port_number = ?",
-                (port.port_number,),
+                "SELECT is_available FROM port_status WHERE station_id = ? AND port_number = ?",
+                (station_data.station_id, port.port_number),
             ).fetchone()
 
             status_changed = existing is None or bool(existing["is_available"]) != port.is_available
@@ -140,35 +139,40 @@ def update_port_status(station_data: StationData) -> None:
                 conn.execute(
                     """
                     INSERT INTO port_status
-                        (port_number, is_available, status_since, last_polled_at, last_poll_error, status_source)
-                    VALUES (?, ?, ?, ?, NULL, ?)
-                    ON CONFLICT(port_number) DO UPDATE SET
+                        (station_id, port_number, is_available, status_since, last_polled_at, last_poll_error, status_source)
+                    VALUES (?, ?, ?, ?, ?, NULL, ?)
+                    ON CONFLICT(station_id, port_number) DO UPDATE SET
                         is_available = excluded.is_available,
                         status_since = excluded.status_since,
                         last_polled_at = excluded.last_polled_at,
                         last_poll_error = NULL,
                         status_source = excluded.status_source
                     """,
-                    (port.port_number, int(port.is_available), now, now, port.status_source),
+                    (station_data.station_id, port.port_number, int(port.is_available), now, now, port.status_source),
                 )
                 logger.info(
-                    "Port %d status changed → %s (source: %s)",
+                    "Station %d port %d status changed → %s (source: %s)",
+                    station_data.station_id,
                     port.port_number,
                     "available" if port.is_available else "occupied",
                     port.status_source,
                 )
             else:
                 conn.execute(
-                    "UPDATE port_status SET last_polled_at = ?, last_poll_error = NULL, status_source = ? WHERE port_number = ?",
-                    (now, port.status_source, port.port_number),
+                    "UPDATE port_status SET last_polled_at = ?, last_poll_error = NULL, status_source = ? "
+                    "WHERE station_id = ? AND port_number = ?",
+                    (now, port.status_source, station_data.station_id, port.port_number),
                 )
 
 
-def set_poll_error(error_msg: str) -> None:
-    """Record a poll failure against all port rows."""
+def set_poll_error(station_id: int, error_msg: str) -> None:
+    """Record a poll failure against all port rows for the given station."""
     now = _now_iso()
     with _get_conn() as conn:
-        conn.execute("UPDATE port_status SET last_poll_error = ?, last_polled_at = ?", (error_msg, now))
+        conn.execute(
+            "UPDATE port_status SET last_poll_error = ?, last_polled_at = ? WHERE station_id = ?",
+            (error_msg, now, station_id),
+        )
 
 
 # ---------------------------------------------------------------------------

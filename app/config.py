@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     chargepoint_username: str
     chargepoint_password: str
-    chargepoint_station_id: int
+    chargepoint_station_ids: list[int]
     ntfy_topic: str
     ntfy_url: str = "https://ntfy.sh"
     app_port: int = 8080

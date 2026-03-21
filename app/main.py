@@ -125,6 +125,7 @@ def _build_status_response() -> StatusResponse:
 
         ports.append(
             PortStatus(
+                station_id=row.station_id,
                 port_number=row.port_number,
                 is_available=row.is_available,
                 since=status_since,
@@ -136,7 +137,7 @@ def _build_status_response() -> StatusResponse:
         )
 
     return StatusResponse(
-        station_id=settings.chargepoint_station_id,
+        station_ids=settings.chargepoint_station_ids,
         ports=ports,
         watch_mode_active=watch.is_active,
         watch_mode_since=watch.activated_at,

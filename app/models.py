@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 
 class PortStatus(BaseModel):
+    station_id: int
     port_number: int
     is_available: bool
     since: datetime                 # UTC: when this status last changed
@@ -15,7 +16,7 @@ class PortStatus(BaseModel):
 
 
 class StatusResponse(BaseModel):
-    station_id: int
+    station_ids: list[int]
     ports: list[PortStatus]
     watch_mode_active: bool
     watch_mode_since: Optional[datetime] = None

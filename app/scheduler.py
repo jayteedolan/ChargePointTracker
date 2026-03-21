@@ -69,36 +69,40 @@ async def _do_poll() -> None:
         logger.warning("poll called but no provider is set")
         return
 
-    logger.debug("Polling ChargePoint station %s", settings.chargepoint_station_id)
-    try:
-        station_data = await _provider.get_station_status(settings.chargepoint_station_id)
-    except ChargePointAuthError:
-        logger.warning("Auth error during poll — re-authenticating")
+    any_success = False
+    for station_id in settings.chargepoint_station_ids:
+        logger.debug("Polling ChargePoint station %s", station_id)
         try:
-            await _provider.authenticate()
-            station_data = await _provider.get_station_status(settings.chargepoint_station_id)
+            station_data = await _provider.get_station_status(station_id)
+        except ChargePointAuthError:
+            logger.warning("Auth error polling station %s — re-authenticating", station_id)
+            try:
+                await _provider.authenticate()
+                station_data = await _provider.get_station_status(station_id)
+            except ChargePointError as e:
+                _record_error(station_id, str(e))
+                continue
         except ChargePointError as e:
-            _record_error(str(e))
-            return
-    except ChargePointError as e:
-        _record_error(str(e))
-        return
-    except Exception as e:
-        _record_error(f"Unexpected error: {e}")
-        logger.exception("Unexpected error during poll")
-        return
+            _record_error(station_id, str(e))
+            continue
+        except Exception as e:
+            _record_error(station_id, f"Unexpected error: {e}")
+            logger.exception("Unexpected error polling station %s", station_id)
+            continue
 
-    # Persist results
-    database.update_port_status(station_data)
-    database.log_poll(success=True, payload=_station_data_to_dict(station_data))
+        # Persist results
+        database.update_port_status(station_data)
+        database.log_poll(success=True, payload=_station_data_to_dict(station_data))
+        any_success = True
 
-    # Check whether we need to fire any notifications
-    await _check_notifications()
+    if any_success:
+        # Check whether we need to fire any notifications
+        await _check_notifications()
 
 
-def _record_error(msg: str) -> None:
-    logger.error("Poll failed: %s", msg)
-    database.set_poll_error(msg)
+def _record_error(station_id: int, msg: str) -> None:
+    logger.error("Poll failed for station %s: %s", station_id, msg)
+    database.set_poll_error(station_id, msg)
     database.log_poll(success=False, error=msg)
 
 

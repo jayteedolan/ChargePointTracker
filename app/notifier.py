@@ -31,7 +31,7 @@ async def send_available(ports: list[PortData]) -> None:
         else:
             message = "A charger port is available."
     else:
-        message = "Both charger ports are available."
+        message = f"All {len(ports)} charger ports are available."
 
     message += " Tap 'Stop Watching' to cancel alerts."
 
